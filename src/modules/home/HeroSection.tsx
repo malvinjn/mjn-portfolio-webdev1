@@ -10,13 +10,11 @@ export function HeroSection() {
       </div>
 
       <h1 className="mt-4 max-w-3xl text-3xl font-bold tracking-tight text-slate-950 sm:text-5xl">
-        Membangun Aplikasi Web & Infrastruktur Modern yang Andal.
+        Merancang infrastruktur jaringan & ekosistem web with ❤️
       </h1>
 
       <p className="mt-5 max-w-2xl text-base leading-relaxed text-slate-600 sm:text-lg">
-        Halo, saya Malvin Juliyyan Nugraha. Saya berfokus pada pengembangan
-        aplikasi web modern, administrasi server tervirtualisasi, serta
-        otomatisasi infrastruktur jaringan.
+        Saya Malvin Juliyyan Nugraha. Mahasiswa S1 Teknologi Informasi Universitas Gadjah Mada dengan pengalaman kepemimpinan dan pengelolaan sistem digital, mulai dari pengembangan website, administrasi jaringan (Mikrotik & Proxmox VE), manajemen penyiaran (live streaming), hingga kelancaran publikasi acara.
       </p>
 
       <div className="mt-8 flex flex-wrap gap-4">
