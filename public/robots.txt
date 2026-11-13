@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://webdev1-submission.vercel.app/sitemap.xml
