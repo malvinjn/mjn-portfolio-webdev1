@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/src/lib/supabase";
 import type { Project, Skill } from "@/src/types/project";
 
 export function ProjectManager() {
-  // State Auth
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [email, setEmail] = useState("");
@@ -16,13 +15,11 @@ export function ProjectManager() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // State Data & Loading/Error
   const [projects, setProjects] = useState<Project[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // State Form Project (Create & Update)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -35,12 +32,12 @@ export function ProjectManager() {
   const [sortOrder, setSortOrder] = useState("0");
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
 
-  // State Feedback Form
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // State Tambah Skill Baru
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillCategory, setNewSkillCategory] = useState("Frontend");
 
@@ -121,6 +118,12 @@ export function ProjectManager() {
     setAuthMessage("Autentikasi berhasil. Selamat datang di Dashboard Admin!");
   }
 
+  function fillDemoCredentials() {
+    setEmail("demo@webmjn.my.id");
+    setPassword("demoadmin");
+    setAuthError(null);
+  }
+
   async function handleLogout() {
     await supabase.auth.signOut();
     setFormError(null);
@@ -163,6 +166,56 @@ export function ProjectManager() {
     setSelectedSkillIds((prev) =>
       prev.includes(skillId) ? prev.filter((id) => id !== skillId) : [...prev, skillId]
     );
+  }
+
+  // Handler Upload Gambar ke Supabase Storage
+  async function handleImageUpload(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setFormError(null);
+    setFormSuccess(null);
+
+    if (!file.type.startsWith("image/")) {
+      setFormError("File yang diunggah harus berupa gambar (PNG, JPG, WebP, atau SVG).");
+      return;
+    }
+
+    if (file.size > 3 * 1024 * 1024) {
+      setFormError("Ukuran gambar maksimal 3 MB.");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const ext = file.name.split(".").pop()?.toLowerCase() || "png";
+      const fileName = `project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("project-images")
+        .upload(fileName, file, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message);
+      }
+
+      const { data: publicUrlData } = supabase.storage
+        .from("project-images")
+        .getPublicUrl(fileName);
+
+      setImageUrl(publicUrlData.publicUrl);
+      setFormSuccess("Gambar berhasil diunggah! Klik tombol Simpan di bawah untuk menyimpan proyek.");
+    } catch {
+      setFormError(
+        "Gagal mengunggah gambar. Pastikan bucket 'project-images' sudah dibuat di Supabase."
+      );
+    } finally {
+      setIsUploadingImage(false);
+      e.target.value = "";
+    }
   }
 
   async function handleAddSkill(e: FormEvent<HTMLFormElement>) {
@@ -314,7 +367,6 @@ export function ProjectManager() {
     );
   }
 
-  // TAMPILAN SAAT BELUM LOGIN: Hanya Card Login yang Bersih (Form CRUD Disembunyikan)
   if (!user) {
     return (
       <section
@@ -329,8 +381,7 @@ export function ProjectManager() {
             Login Admin Portal
           </h2>
           <p className="mt-1.5 text-sm text-slate-600">
-            Masuk dengan akun administrator untuk menambah, mengubah, atau menghapus
-            data proyek portofolio.
+            Masuk dengan akun administrator untuk mengelola data proyek portofolio.
           </p>
         </div>
 
@@ -356,7 +407,7 @@ export function ProjectManager() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="nama@email.com"
+              placeholder="demo@webmjn.my.id"
               className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-600 focus:outline-none"
             />
           </div>
@@ -384,14 +435,25 @@ export function ProjectManager() {
             {isLoggingIn ? "Memverifikasi..." : "Masuk ke Dashboard"}
           </button>
         </form>
+
+        <div className="mt-5 border-t border-slate-100 pt-4 text-center">
+          <p className="text-xs text-slate-500">
+            Penguji / Reviewer? Gunakan akun demo berikut:
+          </p>
+          <button
+            type="button"
+            onClick={fillDemoCredentials}
+            className="mt-2 w-full rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+          >
+            Isi Otomatis Akun Demo (demo@webmjn.my.id)
+          </button>
+        </div>
       </section>
     );
   }
 
-  // TAMPILAN SAAT SUDAH LOGIN: Admin Dashboard Penuh
   return (
     <div className="space-y-8">
-      {/* Header Bar Admin & Statistik Singkat */}
       <section
         aria-label="Status Sesi dan Ringkasan Data"
         className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center"
@@ -435,7 +497,6 @@ export function ProjectManager() {
         </div>
       )}
 
-      {/* Grid Form Project & Form Skill */}
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
         <section
           aria-labelledby="form-project-heading"
@@ -550,33 +611,71 @@ export function ProjectManager() {
               />
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor="project-repo" className="block text-sm font-semibold text-slate-800">
-                  URL Repository / Live Demo
-                </label>
-                <input
-                  id="project-repo"
-                  type="url"
-                  value={repoUrl}
-                  onChange={(e) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/..."
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm"
-                />
+            <div>
+              <label htmlFor="project-repo" className="block text-sm font-semibold text-slate-800">
+                URL Repository / Live Demo
+              </label>
+              <input
+                id="project-repo"
+                type="url"
+                value={repoUrl}
+                onChange={(e) => setRepoUrl(e.target.value)}
+                placeholder="https://github.com/..."
+                className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm"
+              />
+            </div>
+
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="project-image-upload"
+                    className="block text-sm font-semibold text-slate-800"
+                  >
+                    Upload Gambar Proyek (Maks 3MB)
+                  </label>
+                  <input
+                    id="project-image-upload"
+                    type="file"
+                    accept="image/*"
+                    disabled={isUploadingImage}
+                    onChange={handleImageUpload}
+                    className="mt-1.5 block w-full text-xs text-slate-600 file:mr-3 file: cursor-pointer file:rounded-lg file:border-0 file:bg-blue-600 file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-blue-700"
+                  />
+                  {isUploadingImage && (
+                    <p className="mt-1.5 text-xs font-medium text-blue-600">
+                      Mengunggah gambar ke Supabase Storage...
+                    </p>
+                  )}
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="project-image"
+                    className="block text-sm font-semibold text-slate-800"
+                  >
+                    Atau Path / URL Gambar
+                  </label>
+                  <input
+                    id="project-image"
+                    type="text"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm"
+                  />
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="project-image" className="block text-sm font-semibold text-slate-800">
-                  Path / URL Gambar
-                </label>
-                <input
-                  id="project-image"
-                  type="text"
-                  value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
-                  className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm"
-                />
-              </div>
+              {imageUrl && (
+                <div className="mt-3 flex items-center gap-3">
+                  <img
+                    src={imageUrl}
+                    alt="Preview gambar proyek"
+                    className="h-14 w-24 rounded-lg border border-slate-200 object-cover bg-white"
+                  />
+                  <span className="truncate text-xs text-slate-500">{imageUrl}</span>
+                </div>
+              )}
             </div>
 
             <fieldset className="pt-2">
@@ -623,7 +722,7 @@ export function ProjectManager() {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingImage}
               className="w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
             >
               {isSubmitting
@@ -689,7 +788,6 @@ export function ProjectManager() {
         </section>
       </div>
 
-      {/* Daftar Proyek untuk Edit & Delete */}
       <section
         aria-labelledby="list-manage-heading"
         className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -715,19 +813,26 @@ export function ProjectManager() {
                 key={project.id}
                 className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
               >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-blue-600 uppercase">
-                      #{project.sort_order} • {project.category}
-                    </span>
-                    {project.featured && (
-                      <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
-                        Featured
+                <div className="flex items-center gap-3.5">
+                  <img
+                    src={project.image_url || "/project-placeholder.svg"}
+                    alt={`Thumbnail ${project.title}`}
+                    className="h-12 w-16 shrink-0 rounded-lg border border-slate-200 object-cover bg-slate-100"
+                  />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-blue-600 uppercase">
+                        #{project.sort_order} • {project.category}
                       </span>
-                    )}
+                      {project.featured && (
+                        <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
+                          Featured
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="mt-0.5 font-bold text-slate-950">{project.title}</h3>
+                    <p className="text-sm text-slate-600">{project.summary}</p>
                   </div>
-                  <h3 className="mt-1 font-bold text-slate-950">{project.title}</h3>
-                  <p className="text-sm text-slate-600">{project.summary}</p>
                 </div>
 
                 <div className="flex shrink-0 items-center gap-3">
