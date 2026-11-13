@@ -23,9 +23,9 @@ export function Navbar() {
           </Link>
           <Link
             href="/manage"
-            className="rounded-full bg-blue-600 px-4 py-1.5 text-white transition hover:bg-blue-700"
+            className="rounded-full bg-slate-900 px-4 py-1.5 text-white transition hover:bg-blue-600"
           >
-            Manage CRUD
+            Admin Dashboard
           </Link>
         </div>
       </nav>

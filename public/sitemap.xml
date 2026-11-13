@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://webdev1-submission.vercel.app/</loc>
+    <loc>https://mjn-portfolio-webdev1.vercel.app/</loc>
     <lastmod>2026-11-14</lastmod>
   </url>
   <url>
-    <loc>https://webdev1-submission.vercel.app/projects</loc>
+    <loc>https://mjn-portfolio-webdev1.vercel.app/projects</loc>
     <lastmod>2026-11-14</lastmod>
   </url>
   <url>
-    <loc>https://webdev1-submission.vercel.app/manage</loc>
+    <loc>https://mjn-portfolio-webdev1.vercel.app/manage</loc>
     <lastmod>2026-11-14</lastmod>
   </url>
 </urlset>

@@ -9,10 +9,12 @@ import type { Project, Skill } from "@/src/types/project";
 export function ProjectManager() {
   // State Auth
   const [user, setUser] = useState<User | null>(null);
+  const [authChecking, setAuthChecking] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // State Data & Loading/Error
   const [projects, setProjects] = useState<Project[]>([]);
@@ -77,10 +79,12 @@ export function ProjectManager() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUser(data.user ?? null);
+      setAuthChecking(false);
     });
 
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setAuthChecking(false);
     });
 
     fetchAllData();
@@ -100,10 +104,12 @@ export function ProjectManager() {
       return;
     }
 
+    setIsLoggingIn(true);
     const { error } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
+    setIsLoggingIn(false);
 
     if (error) {
       setAuthError("Login gagal. Periksa kembali email dan password Anda.");
@@ -112,12 +118,14 @@ export function ProjectManager() {
 
     setEmail("");
     setPassword("");
-    setAuthMessage("Berhasil login! Anda kini dapat menambah, mengubah, dan menghapus data.");
+    setAuthMessage("Autentikasi berhasil. Selamat datang di Dashboard Admin!");
   }
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    setAuthMessage("Anda telah logout.");
+    setFormError(null);
+    setFormSuccess(null);
+    setAuthMessage("Anda telah keluar dari sesi Admin.");
   }
 
   function resetForm() {
@@ -148,6 +156,7 @@ export function ProjectManager() {
     setSelectedSkillIds((project.skills ?? []).map((s) => s.id));
     setFormError(null);
     setFormSuccess(null);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function toggleSkillSelection(skillId: string) {
@@ -160,11 +169,6 @@ export function ProjectManager() {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
-
-    if (!user) {
-      setFormError("Silakan login terlebih dahulu untuk menambah skill.");
-      return;
-    }
 
     const cleanName = newSkillName.trim();
     if (!cleanName) {
@@ -190,11 +194,6 @@ export function ProjectManager() {
     e.preventDefault();
     setFormError(null);
     setFormSuccess(null);
-
-    if (!user) {
-      setFormError("Akses ditolak: Anda harus login untuk menyimpan perubahan ke database.");
-      return;
-    }
 
     const cleanTitle = title.trim();
     const cleanSlug =
@@ -228,7 +227,6 @@ export function ProjectManager() {
       let targetProjectId = editingId;
 
       if (editingId) {
-        // UPDATE Project
         const { error: updateError } = await supabase
           .from("projects")
           .update({
@@ -245,11 +243,8 @@ export function ProjectManager() {
           .eq("id", editingId);
 
         if (updateError) throw new Error(updateError.message);
-
-        // Sinkronisasi relasi project_skills
         await supabase.from("project_skills").delete().eq("project_id", editingId);
       } else {
-        // CREATE Project
         const { data: inserted, error: insertError } = await supabase
           .from("projects")
           .insert({
@@ -270,7 +265,6 @@ export function ProjectManager() {
         targetProjectId = inserted.id;
       }
 
-      // INSERT relasi ke project_skills jika ada skill yang dipilih
       if (targetProjectId && selectedSkillIds.length > 0) {
         const skillRows = selectedSkillIds.map((skillId) => ({
           project_id: targetProjectId,
@@ -283,14 +277,12 @@ export function ProjectManager() {
       setFormSuccess(
         editingId
           ? `Proyek "${cleanTitle}" berhasil diperbarui!`
-          : `Proyek baru "${cleanTitle}" berhasil ditambahkan ke database!`
+          : `Proyek baru "${cleanTitle}" berhasil ditambahkan!`
       );
       resetForm();
       await fetchAllData();
     } catch {
-      setFormError(
-        "Gagal menyimpan proyek. Pastikan slug unik dan seluruh input sudah benar."
-      );
+      setFormError("Gagal menyimpan proyek. Pastikan slug unik dan seluruh input valid.");
     } finally {
       setIsSubmitting(false);
     }
@@ -299,11 +291,6 @@ export function ProjectManager() {
   async function handleDeleteProject(project: Project) {
     setFormError(null);
     setFormSuccess(null);
-
-    if (!user) {
-      setFormError("Silakan login terlebih dahulu untuk menghapus proyek.");
-      return;
-    }
 
     const { error } = await supabase.from("projects").delete().eq("id", project.id);
 
@@ -317,87 +304,120 @@ export function ProjectManager() {
     setFormSuccess(`Proyek "${project.title}" berhasil dihapus.`);
   }
 
-  return (
-    <div className="space-y-10">
-      {/* Panel Autentikasi Supabase */}
+  if (authChecking) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+        <p role="status" className="text-sm font-medium text-slate-600">
+          Memeriksa sesi autentikasi...
+        </p>
+      </div>
+    );
+  }
+
+  // TAMPILAN SAAT BELUM LOGIN: Hanya Card Login yang Bersih (Form CRUD Disembunyikan)
+  if (!user) {
+    return (
       <section
-        aria-labelledby="auth-heading"
-        className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+        aria-labelledby="login-heading"
+        className="mx-auto max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:p-8"
       >
-        <h2 id="auth-heading" className="text-lg font-bold text-slate-950">
-          Status Autentikasi (Row Level Security)
-        </h2>
+        <div className="text-center">
+          <span className="inline-block rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600">
+            Protected Area • Supabase RLS
+          </span>
+          <h2 id="login-heading" className="mt-3 text-2xl font-bold text-slate-950">
+            Login Admin Portal
+          </h2>
+          <p className="mt-1.5 text-sm text-slate-600">
+            Masuk dengan akun administrator untuk menambah, mengubah, atau menghapus
+            data proyek portofolio.
+          </p>
+        </div>
 
         {authError && (
-          <p role="alert" className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-700">
+          <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">
             {authError}
           </p>
         )}
         {authMessage && (
-          <p role="status" className="mt-3 rounded-lg bg-green-50 p-3 text-sm text-green-700">
+          <p role="status" className="mt-4 rounded-xl bg-green-50 p-3 text-sm text-green-700">
             {authMessage}
           </p>
         )}
 
-        {user ? (
-          <div className="mt-4 flex flex-wrap items-center justify-between gap-4">
-            <p className="text-sm text-slate-700">
-              Login sebagai: <strong className="text-slate-950">{user.email}</strong>{" "}
-              <span className="ml-2 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800">
-                Authenticated (Full CRUD Access)
-              </span>
-            </p>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              Logout
-            </button>
+        <form onSubmit={handleLogin} noValidate className="mt-6 space-y-4">
+          <div>
+            <label htmlFor="auth-email" className="block text-sm font-semibold text-slate-800">
+              Email Administrator
+            </label>
+            <input
+              id="auth-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="nama@email.com"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-600 focus:outline-none"
+            />
           </div>
-        ) : (
-          <form onSubmit={handleLogin} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <div>
-              <label htmlFor="auth-email" className="block text-xs font-semibold text-slate-700">
-                Email Admin
-              </label>
-              <input
-                id="auth-email"
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@webdev.ugm"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label htmlFor="auth-password" className="block text-xs font-semibold text-slate-700">
-                Password
-              </label>
-              <input
-                id="auth-password"
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2 text-sm"
-              />
-            </div>
-            <div className="flex items-end">
-              <button
-                type="submit"
-                className="w-full rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
-              >
-                Login untuk Akses CRUD
-              </button>
-            </div>
-          </form>
-        )}
+
+          <div>
+            <label htmlFor="auth-password" className="block text-sm font-semibold text-slate-800">
+              Password
+            </label>
+            <input
+              id="auth-password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="mt-1.5 w-full rounded-xl border border-slate-300 px-3.5 py-2.5 text-sm focus:border-blue-600 focus:outline-none"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={isLoggingIn}
+            className="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:opacity-50"
+          >
+            {isLoggingIn ? "Memverifikasi..." : "Masuk ke Dashboard"}
+          </button>
+        </form>
+      </section>
+    );
+  }
+
+  // TAMPILAN SAAT SUDAH LOGIN: Admin Dashboard Penuh
+  return (
+    <div className="space-y-8">
+      {/* Header Bar Admin & Statistik Singkat */}
+      <section
+        aria-label="Status Sesi dan Ringkasan Data"
+        className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm sm:flex-row sm:items-center"
+      >
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="h-2.5 w-2.5 rounded-full bg-green-500"></span>
+            <p className="text-sm font-semibold text-slate-900">
+              Sesi Aktif: {user.email}
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-slate-600">
+            Total <strong>{projects.length} Proyek</strong> dan{" "}
+            <strong>{skills.length} Skills</strong> tersimpan di Supabase.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={handleLogout}
+          className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+        >
+          Logout Sesi
+        </button>
       </section>
 
-      {/* Notifikasi Global Form CRUD */}
       {formError && (
         <div
           role="alert"
@@ -561,7 +581,7 @@ export function ProjectManager() {
 
             <fieldset className="pt-2">
               <legend className="text-sm font-semibold text-slate-800">
-                Pilih Teknologi / Skills Terkait (Tabel Relasi)
+                Pilih Teknologi / Skills Terkait
               </legend>
               <div className="mt-2 flex flex-wrap gap-2">
                 {skills.map((skill) => {
@@ -615,7 +635,6 @@ export function ProjectManager() {
           </form>
         </section>
 
-        {/* Form Tambah Skill */}
         <section
           aria-labelledby="form-skill-heading"
           className="h-fit rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"

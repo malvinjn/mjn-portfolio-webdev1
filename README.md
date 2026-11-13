@@ -3,7 +3,8 @@
 Final Submission untuk **Pelatihan Web Development 1 KMTETI FT UGM**. Aplikasi web portofolio interaktif yang menampilkan katalog proyek, pencarian dan filter berbasis state, serta manajemen data proyek dan keahlian (CRUD) menggunakan database relasional Supabase dengan Row Level Security (RLS).
 
 ## 🔗 Live Link
-- **Live URL:** [https://webdev1-submission.vercel.app](https://webdev1-submission.vercel.app) *(Ganti dengan URL Vercel Anda setelah deploy)*
+- **Live URL:** [https://mjn-portfolio-webdev1.vercel.app](https://mjn-portfolio-webdev1.vercel.app)
+- **GitHub Repository:** [https://github.com/malvinjn/mjn-portfolio-webdev1](https://github.com/malvinjn/mjn-portfolio-webdev1)
 
 ## ✨ Fitur Utama
 - **3 Halaman Utama:**
@@ -24,5 +25,5 @@ Final Submission untuk **Pelatihan Web Development 1 KMTETI FT UGM**. Aplikasi w
 
 1. **Clone repository:**
    ```bash
-   git clone [https://github.com/username/webdev1-submission.git](https://github.com/username/webdev1-submission.git)
-   cd webdev1-submission
+   git clone https://github.com/malvinjn/mjn-portfolio-webdev1.git
+   cd mjn-portfolio-webdev1

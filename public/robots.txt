@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://webdev1-submission.vercel.app/sitemap.xml
+Sitemap: https://mjn-portfolio-webdev1.vercel.app/sitemap.xml
