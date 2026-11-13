@@ -5,17 +5,33 @@ type ProjectCardProps = {
 };
 
 export function ProjectCard({ project }: ProjectCardProps) {
-  const imageSrc = project.image_url?.trim() || "/project-placeholder.svg";
+  const hasCustomImage =
+    Boolean(project.image_url?.trim()) &&
+    project.image_url !== "/project-placeholder.svg";
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md">
       <div className="relative aspect-video w-full overflow-hidden bg-slate-100">
-        <img
-          src={imageSrc}
-          alt={`Tampilan proyek ${project.title}`}
-          loading="lazy"
-          className="h-full w-full object-cover"
-        />
+        {hasCustomImage ? (
+          <img
+            src={project.image_url!}
+            alt={`Tampilan proyek ${project.title}`}
+            loading="lazy"
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div
+            role="img"
+            aria-label={`Ilustrasi proyek ${project.title}`}
+            className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-blue-600 to-slate-900 p-6 text-center text-white"
+          >
+            <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold tracking-wider uppercase backdrop-blur">
+              {project.category}
+            </span>
+            <p className="mt-3 line-clamp-2 text-lg font-bold">{project.title}</p>
+          </div>
+        )}
+
         {project.featured && (
           <span className="absolute top-3 right-3 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow">
             Featured

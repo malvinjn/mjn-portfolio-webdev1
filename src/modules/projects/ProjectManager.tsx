@@ -6,7 +6,36 @@ import type { User } from "@supabase/supabase-js";
 import { supabase } from "@/src/lib/supabase";
 import type { Project, Skill } from "@/src/types/project";
 
+function compressImageToWebpDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxWidth = 800;
+        const scale = img.width > maxWidth ? maxWidth / img.width : 1;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          reject(new Error("Gagal memproses gambar."));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL("image/webp", 0.82));
+      };
+      img.onerror = () => reject(new Error("File gambar tidak valid."));
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Gagal membaca file."));
+    reader.readAsDataURL(file);
+  });
+}
+
 export function ProjectManager() {
+  // State Auth
   const [user, setUser] = useState<User | null>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [email, setEmail] = useState("");
@@ -15,11 +44,13 @@ export function ProjectManager() {
   const [authError, setAuthError] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  // State Data & Loading/Error
   const [projects, setProjects] = useState<Project[]>([]);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
+  // State Form Project (Create & Update)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
@@ -27,17 +58,22 @@ export function ProjectManager() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("Frontend");
   const [repoUrl, setRepoUrl] = useState("");
-  const [imageUrl, setImageUrl] = useState("/project-placeholder.svg");
+  const [imageUrl, setImageUrl] = useState("");
   const [featured, setFeatured] = useState(false);
   const [sortOrder, setSortOrder] = useState("0");
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
 
+  // State Upload Gambar
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
+  // State Feedback Form
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // State Tambah Skill Baru
   const [newSkillName, setNewSkillName] = useState("");
   const [newSkillCategory, setNewSkillCategory] = useState("Frontend");
 
@@ -139,7 +175,9 @@ export function ProjectManager() {
     setDescription("");
     setCategory("Frontend");
     setRepoUrl("");
-    setImageUrl("/project-placeholder.svg");
+    setImageUrl("");
+    setUploadedFileName(null);
+    setUploadNotice(null);
     setFeatured(false);
     setSortOrder("0");
     setSelectedSkillIds([]);
@@ -153,7 +191,13 @@ export function ProjectManager() {
     setDescription(project.description);
     setCategory(project.category);
     setRepoUrl(project.repo_url ?? "");
-    setImageUrl(project.image_url ?? "/project-placeholder.svg");
+    const cleanImg =
+      project.image_url && project.image_url !== "/project-placeholder.svg"
+        ? project.image_url
+        : "";
+    setImageUrl(cleanImg);
+    setUploadedFileName(null);
+    setUploadNotice(null);
     setFeatured(project.featured);
     setSortOrder(String(project.sort_order));
     setSelectedSkillIds((project.skills ?? []).map((s) => s.id));
@@ -168,25 +212,27 @@ export function ProjectManager() {
     );
   }
 
-  // Handler Upload Gambar ke Supabase Storage
+  // Handler Upload Gambar (Coba Supabase Storage -> Otomatis Fallback ke WebP jika bucket belum ada)
   async function handleImageUpload(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setFormError(null);
-    setFormSuccess(null);
+    setUploadNotice(null);
 
     if (!file.type.startsWith("image/")) {
-      setFormError("File yang diunggah harus berupa gambar (PNG, JPG, WebP, atau SVG).");
+      setFormError("File yang dipilih harus berupa gambar (PNG, JPG, WebP, atau SVG).");
       return;
     }
 
-    if (file.size > 3 * 1024 * 1024) {
-      setFormError("Ukuran gambar maksimal 3 MB.");
+    if (file.size > 5 * 1024 * 1024) {
+      setFormError("Ukuran gambar maksimal 5 MB.");
       return;
     }
 
     setIsUploadingImage(true);
+    setUploadedFileName(file.name);
+
     try {
       const ext = file.name.split(".").pop()?.toLowerCase() || "png";
       const fileName = `project-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -198,23 +244,23 @@ export function ProjectManager() {
           upsert: false,
         });
 
-      if (uploadError) {
-        throw new Error(uploadError.message);
+      if (!uploadError) {
+        const { data: publicUrlData } = supabase.storage
+          .from("project-images")
+          .getPublicUrl(fileName);
+
+        setImageUrl(publicUrlData.publicUrl);
+        setUploadNotice(`Berhasil diunggah ke Storage: ${file.name}`);
+      } else {
+        // Fallback otomatis ke WebP terkompresi agar tetap berhasil disimpan tanpa bucket
+        const webpDataUrl = await compressImageToWebpDataUrl(file);
+        setImageUrl(webpDataUrl);
+        setUploadNotice(`Gambar "${file.name}" siap disimpan (dioptimasi ke WebP).`);
       }
-
-      const { data: publicUrlData } = supabase.storage
-        .from("project-images")
-        .getPublicUrl(fileName);
-
-      setImageUrl(publicUrlData.publicUrl);
-      setFormSuccess("Gambar berhasil diunggah! Klik tombol Simpan di bawah untuk menyimpan proyek.");
     } catch {
-      setFormError(
-        "Gagal mengunggah gambar. Pastikan bucket 'project-images' sudah dibuat di Supabase."
-      );
+      setFormError("Gagal memproses gambar. Silakan coba gambar lain.");
     } finally {
       setIsUploadingImage(false);
-      e.target.value = "";
     }
   }
 
@@ -289,7 +335,7 @@ export function ProjectManager() {
             description: cleanDesc,
             category,
             repo_url: repoUrl.trim() || null,
-            image_url: imageUrl.trim() || "/project-placeholder.svg",
+            image_url: imageUrl.trim() || null,
             featured,
             sort_order: orderNum,
           })
@@ -307,7 +353,7 @@ export function ProjectManager() {
             description: cleanDesc,
             category,
             repo_url: repoUrl.trim() || null,
-            image_url: imageUrl.trim() || "/project-placeholder.svg",
+            image_url: imageUrl.trim() || null,
             featured,
             sort_order: orderNum,
           })
@@ -367,6 +413,7 @@ export function ProjectManager() {
     );
   }
 
+  // TAMPILAN SAAT BELUM LOGIN
   if (!user) {
     return (
       <section
@@ -452,6 +499,7 @@ export function ProjectManager() {
     );
   }
 
+  // TAMPILAN SAAT SUDAH LOGIN
   return (
     <div className="space-y-8">
       <section
@@ -625,14 +673,15 @@ export function ProjectManager() {
               />
             </div>
 
-            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+            {/* Area Upload Gambar yang Bersih & Bebas Broken Image */}
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label
                     htmlFor="project-image-upload"
                     className="block text-sm font-semibold text-slate-800"
                   >
-                    Upload Gambar Proyek (Maks 3MB)
+                    Upload Gambar Proyek (Maks 5MB)
                   </label>
                   <input
                     id="project-image-upload"
@@ -640,13 +689,8 @@ export function ProjectManager() {
                     accept="image/*"
                     disabled={isUploadingImage}
                     onChange={handleImageUpload}
-                    className="mt-1.5 block w-full text-xs text-slate-600 file:mr-3 file: cursor-pointer file:rounded-lg file:border-0 file:bg-blue-600 file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-blue-700"
+                    className="mt-1.5 block w-full text-xs text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-blue-600 file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-white hover:file:bg-blue-700"
                   />
-                  {isUploadingImage && (
-                    <p className="mt-1.5 text-xs font-medium text-blue-600">
-                      Mengunggah gambar ke Supabase Storage...
-                    </p>
-                  )}
                 </div>
 
                 <div>
@@ -654,26 +698,64 @@ export function ProjectManager() {
                     htmlFor="project-image"
                     className="block text-sm font-semibold text-slate-800"
                   >
-                    Atau Path / URL Gambar
+                    Atau Tempel URL Gambar Eksternal
                   </label>
                   <input
                     id="project-image"
                     type="text"
-                    value={imageUrl}
-                    onChange={(e) => setImageUrl(e.target.value)}
+                    value={imageUrl.startsWith("data:") ? "" : imageUrl}
+                    onChange={(e) => {
+                      setImageUrl(e.target.value);
+                      setUploadedFileName(null);
+                    }}
+                    placeholder="https://... (opsional)"
                     className="mt-1.5 w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm"
                   />
                 </div>
               </div>
 
+              {isUploadingImage && (
+                <p className="text-xs font-medium text-blue-600">
+                  Memproses dan mengunggah gambar...
+                </p>
+              )}
+
+              {uploadNotice && (
+                <p className="text-xs font-medium text-green-700">
+                  ✓ {uploadNotice}
+                </p>
+              )}
+
               {imageUrl && (
-                <div className="mt-3 flex items-center gap-3">
-                  <img
-                    src={imageUrl}
-                    alt="Preview gambar proyek"
-                    className="h-14 w-24 rounded-lg border border-slate-200 object-cover bg-white"
-                  />
-                  <span className="truncate text-xs text-slate-500">{imageUrl}</span>
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white p-2.5">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <img
+                      src={imageUrl}
+                      alt="Preview gambar proyek"
+                      className="h-14 w-24 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover"
+                    />
+                    <div className="truncate">
+                      <p className="text-xs font-semibold text-slate-800">
+                        {uploadedFileName || "Gambar Proyek Aktif"}
+                      </p>
+                      <p className="truncate text-xs text-slate-500">
+                        {imageUrl.startsWith("data:")
+                          ? "Gambar terkompresi (WebP)"
+                          : imageUrl}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setImageUrl("");
+                      setUploadedFileName(null);
+                      setUploadNotice(null);
+                    }}
+                    className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 hover:bg-red-100"
+                  >
+                    Hapus Gambar
+                  </button>
                 </div>
               )}
             </div>
@@ -756,7 +838,7 @@ export function ProjectManager() {
                 required
                 value={newSkillName}
                 onChange={(e) => setNewSkillName(e.target.value)}
-                placeholder="Misal: Docker / PostgreSQL"
+                placeholder="Misal: Mikrotik / Proxmox"
                 className="mt-1 w-full rounded-xl border border-slate-300 px-3.5 py-2 text-sm"
               />
             </div>
@@ -788,6 +870,7 @@ export function ProjectManager() {
         </section>
       </div>
 
+      {/* Daftar Proyek untuk Edit & Delete */}
       <section
         aria-labelledby="list-manage-heading"
         className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
@@ -808,51 +891,61 @@ export function ProjectManager() {
           <p className="mt-4 text-sm text-slate-600">Belum ada proyek di database.</p>
         ) : (
           <div className="mt-4 divide-y divide-slate-200">
-            {projects.map((project) => (
-              <article
-                key={project.id}
-                className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
-              >
-                <div className="flex items-center gap-3.5">
-                  <img
-                    src={project.image_url || "/project-placeholder.svg"}
-                    alt={`Thumbnail ${project.title}`}
-                    className="h-12 w-16 shrink-0 rounded-lg border border-slate-200 object-cover bg-slate-100"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-blue-600 uppercase">
-                        #{project.sort_order} • {project.category}
-                      </span>
-                      {project.featured && (
-                        <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
-                          Featured
+            {projects.map((project) => {
+              const hasValidImg =
+                project.image_url && project.image_url !== "/project-placeholder.svg";
+              return (
+                <article
+                  key={project.id}
+                  className="flex flex-col justify-between gap-4 py-4 sm:flex-row sm:items-center"
+                >
+                  <div className="flex items-center gap-3.5">
+                    {hasValidImg ? (
+                      <img
+                        src={project.image_url!}
+                        alt={`Thumbnail ${project.title}`}
+                        className="h-12 w-16 shrink-0 rounded-lg border border-slate-200 bg-slate-100 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-12 w-16 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-xs font-bold text-blue-600">
+                        MJN
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-blue-600 uppercase">
+                          #{project.sort_order} • {project.category}
                         </span>
-                      )}
+                        {project.featured && (
+                          <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-800">
+                            Featured
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="mt-0.5 font-bold text-slate-950">{project.title}</h3>
+                      <p className="text-sm text-slate-600">{project.summary}</p>
                     </div>
-                    <h3 className="mt-0.5 font-bold text-slate-950">{project.title}</h3>
-                    <p className="text-sm text-slate-600">{project.summary}</p>
                   </div>
-                </div>
 
-                <div className="flex shrink-0 items-center gap-3">
-                  <button
-                    type="button"
-                    onClick={() => handleSelectEdit(project)}
-                    className="rounded-lg border border-slate-300 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteProject(project)}
-                    className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
-                  >
-                    Hapus
-                  </button>
-                </div>
-              </article>
-            ))}
+                  <div className="flex shrink-0 items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectEdit(project)}
+                      className="rounded-lg border border-slate-300 px-3.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProject(project)}
+                      className="rounded-lg border border-red-200 bg-red-50 px-3.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-100"
+                    >
+                      Hapus
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
