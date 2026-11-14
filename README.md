@@ -1,4 +1,4 @@
-# MJN.dev — Personal Portfolio & Project Showcase
+# Personal Portfolio & Project Showcase
 
 Final Submission untuk **Pelatihan Web Development 1 KMTETI FT UGM**. Aplikasi web portofolio interaktif yang menampilkan katalog proyek, pencarian dan filter berbasis state, serta manajemen data proyek dan keahlian (CRUD) menggunakan database relasional Supabase dengan Row Level Security (RLS).
 
@@ -21,9 +21,16 @@ Final Submission untuk **Pelatihan Web Development 1 KMTETI FT UGM**. Aplikasi w
 - **Database & Auth:** Supabase (PostgreSQL & GoTrue Auth)
 - **Deployment:** Vercel
 
+## 📸 Screenshot
+
+### 1. Halaman Beranda (Home)
+![Halaman Beranda](./public/screenshot-home.png)
+
+### 2. Halaman Katalog Proyek (Search & Filter)
+![Halaman Katalog Proyek](./public/screenshot-projects.png)
+
 ## 🚀 Cara Menjalankan di Lokal (Setup)
 
 1. **Clone repository:**
    ```bash
    git clone https://github.com/malvinjn/mjn-portfolio-webdev1.git
-   cd mjn-portfolio-webdev1
